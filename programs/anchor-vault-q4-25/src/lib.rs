@@ -3,7 +3,7 @@ use anchor_lang::{
     system_program::{transfer, Transfer},
 };
 
-declare_id!("2u5cG7PEVL5KdTRMWSjdwqtBVv1anE5Hvv4FGSPZVRUN");
+declare_id!("FCjaoezrq6gSAskcsMcqsPsTLp9jZ4GQyWwRpWeL3Uxh");
 
 #[program]
 pub mod anchor_vault_q4_25 {
@@ -17,13 +17,13 @@ pub mod anchor_vault_q4_25 {
         ctx.accounts.deposit(amount)
     }
 
-    // pub fn withdraw(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
-    //     ctx.accounts.withdraw(amount)
-    // }
+    pub fn withdraw(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
+        ctx.accounts.withdraw(amount)
+    }
 
-    // pub fn close(ctx: Context<Close>) -> Result<()> {
-    //     ctx.accounts.close()
-    // }
+    pub fn close(ctx: Context<Close>) -> Result<()> {
+        ctx.accounts.close()
+    }
 }
 
 #[derive(Accounts)]
@@ -104,31 +104,85 @@ impl<'info> Deposit<'info> {
         Ok(())
     }
 }
-
-// #[derive(Accounts)]
-// pub struct Withdraw<'info> {
+//get th eaccounts needed to withdraw the solana or instructions to pass, transfer from user pda valult to user
+//we need the following accounts
+// first is the payer that is the signer of the transaction, we need vault and vault state account
+#[derive(Accounts)]
+pub struct Withdraw<'info> {
 // TODO: Implement Withdraw accounts
-// }
+    #[account(mut)]
+    pub user: Signer<'info>,
+    #[account(
+        mut,
+        seeds = [b"vault",vault_state.key().as_ref()],
+        bump = vault_state.vault_bump,
+    )]
+    pub vault : SystemAccount<'info>,
+    #[account(
+        seeds = [b"state",user.key().as_ref()],
+        bump = vault_state.state_bump,
+    )]
+    pub vault_state: Account<'info, VaultState>,
+    pub system_program: Program<'info, System>,
+}
 
-// impl<'info> Withdraw<'info> {
-//     pub fn withdraw(&mut self, _amount: u64) -> Result<()> {
-//         TODO: Implement withdraw
+impl<'info> Withdraw<'info> {
+    pub fn withdraw(&mut self, _amount: u64) -> Result<()> {
+        let vault_state_key = self.vault_state.key();
+        let signer_seeds : &[&[&[u8]]] = &[&[
+            b"vault", vault_state_key.as_ref(),&[self.vault_state.vault_bump],
+        ]];
+        // let signer_seed =  &[vault_seeds];
+        let cpi_programm = self.system_program.to_account_info();
+        let cpi_accounts = Transfer{
+            from:self.vault.to_account_info(),
+            to:self.user.to_account_info(),
+        };
+        let cpi_context = CpiContext::new_with_signer(cpi_programm,cpi_accounts, signer_seeds);
+        transfer(cpi_context,_amount)?;
 
-//         Ok(())
-//     }
-// }
+        Ok(())
+    }
+}
 
-// #[derive(Accounts)]
-// pub struct Close<'info> {
-//      TODO: Implement Close accounts
-// }
+#[derive(Accounts)]
+pub struct Close<'info> {
+    pub user : Signer<'info>,
+    //  TODO: Implement Close accounts
+    #[account(mut,
+        seeds = [b"vault",vault_state.key().as_ref()],
+        bump = vault_state.vault_bump,
 
-// impl<'info> Close<'info> {
-//     pub fn close(&mut self) -> Result<()> {
-//          TODO: Implement close
-//         Ok(())
-//     }
-// }
+    )]
+    pub vault : SystemAccount<'info>,
+    #[account(
+        mut,
+        seeds = [b"state",user.key().as_ref()],
+        bump = vault_state.state_bump,
+        close = user,
+    )]
+    pub vault_state: Account<'info, VaultState>,
+    pub system_program: Program<'info, System>,
+}
+
+impl<'info> Close<'info> {
+    pub fn close(&mut self) -> Result<()> {
+        //  TODO: Implement close
+        let vault_state_key = self.vault_state.key();
+        let signer_seeds : &[&[&[u8]]] = &[&[
+            b"vault", vault_state_key.as_ref(),&[self.vault_state.vault_bump],
+        ]];
+        let cpi_programm = self.system_program.to_account_info();
+        let cpi_accounts = Transfer{
+            from:self.vault.to_account_info(),
+            to:self.user.to_account_info(),
+        };
+        let cpi_context = CpiContext::new_with_signer(cpi_programm,cpi_accounts, signer_seeds);
+        let vault_lamports = self.vault.to_account_info().lamports();
+        transfer(cpi_context,vault_lamports)?;
+        Ok(())
+    }
+}
 
 #[derive(InitSpace)]
 #[account]
