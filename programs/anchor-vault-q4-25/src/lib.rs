@@ -147,6 +147,7 @@ impl<'info> Withdraw<'info> {
 
 #[derive(Accounts)]
 pub struct Close<'info> {
+    #[account(mut)] //Fixed : The user accounts needs to be mutable to recieve the rent exempt lamports
     pub user : Signer<'info>,
     //  TODO: Implement Close accounts
     #[account(mut,
